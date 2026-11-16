@@ -10,6 +10,7 @@ import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
 import type { SessionCursor } from './db.js'
+import { writeChatRoute } from './routes.js'
 import {
   clearAllDrafts,
   clearDraft,
@@ -444,17 +445,28 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
         return
       }
       const summary = get().sessions.find((session) => session.id === id)
-      if (!summary) {
-        return
-      }
       if (!stored) {
+        if (!summary) {
+          if (get().activeId === id) {
+            set({ activeId: null })
+            writeChatRoute(null, true)
+          }
+          return
+        }
         throw new Error(`Session ${id} is missing from cloud storage`)
       }
       const settled = settleInterrupted(normalizeSession(stored))
       // 读取期间可能已在列表重命名，保留最新元数据，不能让旧读取覆盖它。
-      const session = sameSummary(settled, summary) ? settled : { ...settled, ...summary }
+      const loadedSummary = summary ?? toSessionSummary(settled)
+      const session = sameSummary(settled, loadedSummary)
+        ? settled
+        : { ...settled, ...loadedSummary }
+      const addSummary = !summary && get().activeId === id
       touchSession(id)
-      set((state) => ({ sessionCache: { ...state.sessionCache, [id]: session } }))
+      set((state) => ({
+        sessionCache: { ...state.sessionCache, [id]: session },
+        ...(addSummary ? { sessions: sortSessions([...state.sessions, loadedSummary]) } : {}),
+      }))
       if (session !== stored) {
         persist(id)
       }
@@ -539,6 +551,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
       sessionSaveErrors: {},
       activeId: null,
     })
+    writeChatRoute(null, true)
     return page.totalCount ?? page.items.length
   } finally {
     set({ importingHistory: false })
@@ -553,15 +566,21 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
   }
 }
 
-export const newChat = () => {
+export const newChat = (updateRoute = true) => {
   if (!get().importingHistory) {
+    if (updateRoute) {
+      writeChatRoute(null)
+    }
     set({ activeId: null })
     trimSessionCache()
   }
 }
 
-export const selectSession = (id: string) => {
-  if (!get().importingHistory && get().sessions.some((session) => session.id === id)) {
+export const selectSession = (id: string, updateRoute = true) => {
+  if (!get().importingHistory) {
+    if (updateRoute) {
+      writeChatRoute(id)
+    }
     touchSession(id)
     set({ activeId: id })
     void ensureSessionLoaded(id)
@@ -622,6 +641,7 @@ const removeSessionData = async (id: string): Promise<boolean> => {
     unsavedSessions.delete(id)
     pendingFiles.delete(id)
     clearDraft(id)
+    const wasActive = get().activeId === id
     set((state) => ({
       sessions: state.sessions.filter((session) => session.id !== id),
       sessionCache: Object.fromEntries(
@@ -635,6 +655,9 @@ const removeSessionData = async (id: string): Promise<boolean> => {
       ),
       activeId: state.activeId === id ? null : state.activeId,
     }))
+    if (wasActive) {
+      writeChatRoute(null, true)
+    }
     return true
   } catch (error) {
     db.reportStorageError('delete session')(error)
@@ -691,6 +714,7 @@ export const sendMessage = (targetSessionId: string | null) => {
       sessionCache: { ...state.sessionCache, [session.id]: session },
       activeId: session.id,
     }))
+    writeChatRoute(session.id)
   }
   const current = getSession(sessionId)
   if (!current) {

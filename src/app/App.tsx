@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { initSettings, useSettings } from '../services/settings.js'
 import { migrateLegacyChat } from '../services/chat/migrateLegacy.js'
@@ -6,11 +6,13 @@ import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport
 import {
   bindChatPersistence,
   initChat,
+  newChat,
   retryDeepSeekFileCleanup,
   retrySaveSessions,
   selectSession,
   useChatStore,
 } from '../services/chat/store.js'
+import { readChatRoute, writeChatRoute } from '../services/chat/routes.js'
 import { SearchPanel } from '../components/search/SearchPanel.js'
 import { closeSearchPanel } from '../components/search/searchPanelState.js'
 import { SessionView } from '../components/session/SessionView.js'
@@ -53,6 +55,7 @@ export const App = () => {
     state.activeId === null ? false : Object.hasOwn(state.streaming, state.activeId)
   )
   const activeId = useChatStore((state) => state.activeId)
+  const initialRouteHandled = useRef(false)
 
   usePreventPageScroll(isMobile)
 
@@ -94,6 +97,35 @@ export const App = () => {
     })()
   }, [])
 
+  useEffect(() => {
+    if (!ready || initialRouteHandled.current) {
+      return
+    }
+    initialRouteHandled.current = true
+    const route = readChatRoute()
+    if (!route.valid) {
+      writeChatRoute(null, true)
+    } else if (route.sessionId !== null) {
+      selectSession(route.sessionId, false)
+    }
+  }, [ready])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const route = readChatRoute()
+      if (!route.valid) {
+        writeChatRoute(null, true)
+        newChat(false)
+      } else if (route.sessionId === null) {
+        newChat(false)
+      } else {
+        selectSession(route.sessionId, false)
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   return (
     <>
       <div ref={frameRef} className={styles.frame}>
@@ -131,7 +163,7 @@ export const App = () => {
                         if (!ready) {
                           void initChat()
                         } else if (activeId !== null) {
-                          selectSession(activeId)
+                          selectSession(activeId, false)
                         }
                       }}
                     >

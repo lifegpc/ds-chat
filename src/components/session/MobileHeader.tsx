@@ -25,7 +25,7 @@ export const MobileHeader = ({ title }: { title?: string }) => {
             tone="primary"
             icon={<IconNewChatOutline20 />}
             aria-label={t('newChat')}
-            onClick={newChat}
+            onClick={() => newChat()}
           />
         </>
       )}
