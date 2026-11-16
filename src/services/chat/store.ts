@@ -38,6 +38,8 @@ import {
 
 /** deepseek-flash 同时支持深度思考与图片输入 */
 const MODEL: ChatModel = 'deepseek-flash'
+const selectedModel = (): ChatModel =>
+  useSettings.getState().expertMode ? 'deepseek-v4-pro' : MODEL
 /** 所有生成请求统一携带的助手身份说明 */
 const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
@@ -316,14 +318,14 @@ export const bindChatPersistence = () => {
   }
 }
 
-/** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
+/** 按当前开关快照模型、深度思考与智能搜索配置。 */
 const createReply = (): AssistantMessage => {
-  const { thinking, search } = useSettings.getState()
+  const { thinking, search, expertMode } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
+    model: expertMode ? 'deepseek-v4-pro' : MODEL,
     thinking,
     search,
     prefix: true,
@@ -689,6 +691,9 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (!prepared) {
     return false
   }
+  if (useSettings.getState().expertMode && prepared.files.some((file) => file.isImage)) {
+    return false
+  }
   const { text, files } = prepared
   const now = Date.now()
   let sessionId = targetSessionId
@@ -846,7 +851,7 @@ export const continueReply = (sessionId: string, messageId: string) => {
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
+    model: previous.model ?? selectedModel(),
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
@@ -947,10 +952,15 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
 /**
  * 发送前补齐附件的 serverId。
  * - 本轮提问的附件并行补齐，任一失败则整体失败，已成功的照常写回，重试时复用成功结果；
- * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的图片：从最新的消息往前逐张补传，
- *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
+ * - 历史轮次中没有 serverId 的支持类型附件，多为导入的文件：从最新消息往前逐张补传；
+ * - 不支持图像理解的模型会跳过图片附件，不补传也不放进请求。
  */
-const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
+const prepareFiles = async (
+  sessionId: string,
+  request: Request,
+  signal: AbortSignal,
+  supportsImages: boolean
+) => {
   const epoch = historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
@@ -962,12 +972,14 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
     signal.addEventListener('abort', () => reject(signal.reason), { once: true })
   })
   const uploads = Promise.allSettled(
-    request.question.files.map(async (file) => {
-      const serverId = await ensureServerId(apiKey, file)
-      if (serverId) {
-        serverIds.set(file.id, serverId)
-      }
-    })
+    request.question.files
+      .filter((file) => supportsImages || !file.isImage)
+      .map(async (file) => {
+        const serverId = await ensureServerId(apiKey, file)
+        if (serverId) {
+          serverIds.set(file.id, serverId)
+        }
+      })
   )
   void uploads.then(() => {
     if (epoch === historyEpoch) {
@@ -983,7 +995,12 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   const pending = new Map<string, FileAttachment>()
   for (const [user] of getContextRounds(request.history).toReversed()) {
     for (const file of user.files) {
-      if (!file.serverId && !serverIds.has(file.id) && !pending.has(file.id)) {
+      if (
+        (supportsImages || !file.isImage) &&
+        !file.serverId &&
+        !serverIds.has(file.id) &&
+        !pending.has(file.id)
+      ) {
         pending.set(file.id, file)
       }
     }
@@ -1013,11 +1030,11 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
 }
 
 /** 本次请求实际会用到的服务端 file_id */
-const collectServerFileIds = (request: Request): Set<string> => {
+const collectServerFileIds = (request: Request, supportsImages: boolean): Set<string> => {
   const ids = new Set<string>()
   const add = (files: FileAttachment[]) => {
     for (const file of files) {
-      if (file.serverId) {
+      if (file.serverId && (supportsImages || !file.isImage)) {
         ids.add(file.serverId)
       }
     }
@@ -1034,7 +1051,12 @@ const collectServerFileIds = (request: Request): Set<string> => {
  * 下一次补齐会重新读取云端原件上传。报错里点名了 file_id 就只重置这些，
  * 没点名（如 invalid file_id）则重置本次请求用到的全部附件。
  */
-const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: unknown): boolean => {
+const reuploadInvalidatedFiles = (
+  sessionId: string,
+  request: Request,
+  error: unknown,
+  supportsImages: boolean
+): boolean => {
   if (!(error instanceof ApiError) || !getFileErrorCode(error)) {
     return false
   }
@@ -1043,7 +1065,7 @@ const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: un
   const targets =
     mentioned.length > 0
       ? new Set(mentioned)
-      : collectServerFileIds(refreshRequest(sessionId, request))
+      : collectServerFileIds(refreshRequest(sessionId, request), supportsImages)
   const session = getSession(sessionId)
   if (targets.size === 0 || !session) {
     return false
@@ -1098,6 +1120,8 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
+  const model = initial.model ?? selectedModel()
+  const supportsImages = model !== 'deepseek-v4-pro'
   if (!getSession(sessionId)?.title) {
     titleRequests.add(controller)
   }
@@ -1117,7 +1141,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       let preparing = true
       let receivedContent = false
       try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
+        const prepared = await prepareFiles(sessionId, request, controller.signal, supportsImages)
         preparing = false
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
@@ -1131,12 +1155,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           prepared.question,
           prepared.prefix,
           initial.thinking ?? false,
-          latestReminder
+          latestReminder,
+          !supportsImages
         )
         const events = streamMessage(
           useSettings.getState().apiKey ?? '',
           {
-            model: initial.model ?? MODEL,
+            model,
             system: SYSTEM_PROMPT,
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
@@ -1188,7 +1213,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         if (
           attempt < FILE_RETRY_LIMIT &&
           !receivedContent &&
-          reuploadInvalidatedFiles(sessionId, request, error)
+          reuploadInvalidatedFiles(sessionId, request, error, supportsImages)
         ) {
           await waitForRetry(attempt, controller.signal)
           if (controller.signal.aborted) {

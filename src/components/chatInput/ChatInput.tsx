@@ -2,12 +2,13 @@ import clsx from 'clsx'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import {
   IconGlobeLanguageOutline14,
+  IconExpertOutline14,
   IconPaperclipOutline16,
   IconSendOutline16,
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
-import { setSearch, setThinking, useSettings } from '../../services/settings.js'
+import { setExpertMode, setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
@@ -26,7 +27,7 @@ import { Tooltip } from '../base/Tooltip.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import { DragMask, useFileDrop } from './DragMask.js'
 import { showToast } from '../base/toastState.js'
-import { ACCEPT, useUploads } from '../../services/attachments.js'
+import { ACCEPT, isImage, resolveMimeType, useUploads } from '../../services/attachments.js'
 import { DraftAttachments } from './DraftAttachments.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
@@ -50,12 +51,14 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
   const thinking = useSettings((state) => state.thinking)
+  const expertMode = useSettings((state) => state.expertMode)
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
+  const hasUnsupportedImages = expertMode && attachments.some((attachment) => attachment.isImage)
 
   useLayoutEffect(() => {
     const toggles = togglesRef.current
@@ -78,7 +81,16 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
       return
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
+    const allowedFiles = expertMode
+      ? files.filter((file) => !isImage(resolveMimeType(file)))
+      : files
+    if (allowedFiles.length !== files.length) {
+      showToast({ key: 'expertModeImageBlocked' })
+    }
+    if (allowedFiles.length === 0) {
+      return
+    }
+    const error = addDraftFiles(sessionId, allowedFiles, useSettings.getState().apiKey ?? '')
     if (error) {
       showToast(error)
     }
@@ -130,7 +142,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const recording = voice.status === 'recording'
 
   // 排队、上传中或上传失败的附件都留在输入框，全部上传成功后才能发送
-  const canSend = !importingHistory && !streaming && voice.status === 'idle' && draftReady
+  const canSend =
+    !importingHistory &&
+    !streaming &&
+    voice.status === 'idle' &&
+    draftReady &&
+    !hasUnsupportedImages
 
   const send = () => {
     if (
@@ -162,6 +179,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       }}
     >
       <DraftAttachments items={attachments} onRetry={retryFile} onRemove={removeFile} />
+      {hasUnsupportedImages ? (
+        <div className={styles.expertImageWarning}>{t('expertModeImageWarning')}</div>
+      ) : null}
       <div className={styles.textareaWrapper}>
         <textarea
           ref={textareaRef}
@@ -200,7 +220,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
         </div>
       </div>
       <div className={styles.functionRow}>
-        {/* 深度思考 / 智能搜索开关，tooltip 在按钮上方 */}
+        {/* 模型、深度思考与智能搜索开关，tooltip 在按钮上方 */}
         <div ref={togglesRef} className={styles.toggles}>
           <Tooltip content={t('deactivatedThinkTooltip')}>
             <button
@@ -212,6 +232,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             >
               <IconThinkOutline14 />
               <span className={styles.toggleLabel}>{t('thinkingSwitch')}</span>
+            </button>
+          </Tooltip>
+          <Tooltip content={t('expertModeTooltip')}>
+            <button
+              type="button"
+              className={clsx(styles.toggle, expertMode && styles.selected)}
+              aria-label={t('expertMode')}
+              aria-pressed={expertMode}
+              onClick={() => setExpertMode(!expertMode)}
+            >
+              <IconExpertOutline14 />
+              <span className={styles.toggleLabel}>{t('expertMode')}</span>
             </button>
           </Tooltip>
           <Tooltip content={t('deactivatedSearchTooltip')}>

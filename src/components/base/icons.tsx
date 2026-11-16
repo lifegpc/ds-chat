@@ -278,6 +278,19 @@ export const IconThinkOutline14 = () => (
   </svg>
 )
 
+export const IconExpertOutline14 = () => (
+  <svg width={14} height={14} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M7 1.1C7.38 1.1 7.55 4.05 8.55 5.05C9.55 6.05 12.5 6.22 12.5 6.6C12.5 6.98 9.55 7.15 8.55 8.15C7.55 9.15 7.38 12.1 7 12.1C6.62 12.1 6.45 9.15 5.45 8.15C4.45 7.15 1.5 6.98 1.5 6.6C1.5 6.22 4.45 6.05 5.45 5.05C6.45 4.05 6.62 1.1 7 1.1Z"
+      fill="currentColor"
+    />
+    <path
+      d="M11.1 9.1C11.28 9.1 11.36 10.45 11.82 10.9C12.27 11.36 13.6 11.44 13.6 11.62C13.6 11.8 12.27 11.88 11.82 12.34C11.36 12.79 11.28 14.1 11.1 14.1C10.92 14.1 10.84 12.79 10.38 12.34C9.93 11.88 8.6 11.8 8.6 11.62C8.6 11.44 9.93 11.36 10.38 10.9C10.84 10.45 10.92 9.1 11.1 9.1Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export const IconThinkOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

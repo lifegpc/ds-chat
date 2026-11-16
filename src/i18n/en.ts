@@ -148,6 +148,12 @@ export const en = {
   chatInputPlaceholderChat: 'Enter a message',
   deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
+  expertMode: 'Expert mode',
+  expertModeTooltip: 'Uses deepseek-v4-pro, which does not support image understanding.',
+  expertModeImageWarning:
+    'deepseek-v4-pro cannot understand images. Remove the images or turn off Expert mode to send.',
+  expertModeImageBlocked:
+    'Expert mode cannot understand images, so they were not added. Turn off Expert mode to upload them.',
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',
   uploadFile: 'Upload files',

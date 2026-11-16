@@ -40,6 +40,14 @@
   cursor: default;
 }
 
+.expertImageWarning {
+  padding: 0 16px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: default;
+}
+
 .attachment {
   position: relative;
   flex-shrink: 0;

@@ -16,6 +16,7 @@ export type Settings = {
   ttsVoice: TtsVoice
   safetyCheck: boolean
   thinking: boolean
+  expertMode: boolean
   search: boolean
   siderCollapsed: boolean
 }
@@ -28,6 +29,7 @@ const KEYS = {
   ttsVoice: 'chat-demo:tts-voice',
   safetyCheck: 'chat-demo:safety-check',
   thinking: 'chat-demo:thinking',
+  expertMode: 'chat-demo:expert-mode',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
 } as const
@@ -86,6 +88,7 @@ export const useSettings = create<Settings>(() => ({
   // Keep the existing behavior: content safety checks were previously always enabled.
   safetyCheck: read(KEYS.safetyCheck) !== 'false',
   thinking: read(KEYS.thinking) === 'true',
+  expertMode: read(KEYS.expertMode) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
@@ -191,6 +194,11 @@ export const setApiKey = async (apiKey: string | null) => {
 
 export const setThinking = (thinking: boolean) => {
   useSettings.setState({ thinking })
+  void persistSettings().catch(reportSettingsError)
+}
+
+export const setExpertMode = (expertMode: boolean) => {
+  useSettings.setState({ expertMode })
   void persistSettings().catch(reportSettingsError)
 }
 
