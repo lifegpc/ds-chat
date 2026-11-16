@@ -88,6 +88,9 @@ export const zh = {
   settingsTtsVoice: '朗读音色',
   settingsTtsVoiceStella: '海星（女声）',
   settingsTtsVoiceTide: '暗潮（男声）',
+  settingsSafetyCheck: '模型内容安全审核',
+  settingsSafetyCheckDescription:
+    '开启 DeepSeek 基础风控，审核输入与输出；命中风险时可能报错或拒答，并产生审核 Token 费用。',
   settingsLocation: '位置信息',
   settingsLocationProvince: '请选择省份/地区',
   settingsLocationCity: '请选择市',

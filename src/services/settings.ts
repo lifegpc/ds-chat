@@ -14,6 +14,7 @@ export type Settings = {
   themePreference: ThemePreference
   location: UserLocation | null
   ttsVoice: TtsVoice
+  safetyCheck: boolean
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
@@ -25,6 +26,7 @@ const KEYS = {
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
   ttsVoice: 'chat-demo:tts-voice',
+  safetyCheck: 'chat-demo:safety-check',
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
@@ -81,6 +83,8 @@ export const useSettings = create<Settings>(() => ({
   location: initialLocation(),
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
+  // Keep the existing behavior: content safety checks were previously always enabled.
+  safetyCheck: read(KEYS.safetyCheck) !== 'false',
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
@@ -166,6 +170,11 @@ export const setThemePreference = (themePreference: ThemePreference) => {
 
 export const setTtsVoice = (ttsVoice: TtsVoice) => {
   useSettings.setState({ ttsVoice })
+  void persistSettings().catch(reportSettingsError)
+}
+
+export const setSafetyCheck = (safetyCheck: boolean) => {
+  useSettings.setState({ safetyCheck })
   void persistSettings().catch(reportSettingsError)
 }
 

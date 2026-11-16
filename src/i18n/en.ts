@@ -93,6 +93,9 @@ export const en = {
   settingsTtsVoice: 'Read-aloud voice',
   settingsTtsVoiceStella: 'Stella (female)',
   settingsTtsVoiceTide: 'Tide (male)',
+  settingsSafetyCheck: 'Model content safety checks',
+  settingsSafetyCheckDescription:
+    'Reviews inputs and outputs. Flagged content may return an error or refusal; safety tokens are billed as output tokens.',
   settingsLocation: 'Location',
   settingsLocationProvince: 'Select province/region',
   settingsLocationCity: 'Select city',

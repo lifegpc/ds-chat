@@ -178,7 +178,8 @@ export type CreateMessageRequest = {
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
   tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
-  safety_check: { level: 'high' }
+  /** Omitted for the API default level (low); high enables model input/output checks. */
+  safety_check?: { level: 'high' }
   title?: { enabled: boolean }
 }
 

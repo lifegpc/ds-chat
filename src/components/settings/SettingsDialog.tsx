@@ -22,6 +22,7 @@ import {
   isChineseBrowser,
   setLocale,
   setLocation,
+  setSafetyCheck,
   setThemePreference,
   setTtsVoice,
   useSettings,
@@ -37,7 +38,7 @@ import { closeSettings, useSettingsDialog, type SettingsSection } from './settin
 import styles from './Settings.module.css'
 
 /**
- * 设置弹窗：分「通用设置」（主题、语言、朗读音色、位置）与「数据管理」（API Key、导入、导出、删除）。
+ * 设置弹窗：分「通用设置」（主题、语言、朗读音色、安全审核、位置）与「数据管理」（API Key、导入、导出、删除）。
  * 桌面端为居中弹窗、左侧导航；移动端为底部弹层、导航横排在内容上方
  */
 export const SettingsDialog = () => {
@@ -99,6 +100,7 @@ const SettingsContent = () => {
               <ThemeSetting />
               <LocaleSetting />
               <TtsVoiceSetting />
+              <SafetyCheckSetting />
               <LocationSetting />
             </>
           ) : (
@@ -308,6 +310,30 @@ const TtsVoiceSetting = () => {
             { value: 'tide', label: t('settingsTtsVoiceTide') },
           ]}
           onChange={setTtsVoice}
+        />
+      }
+    />
+  )
+}
+
+/** 使用 DeepSeek 的 high 级别模型内容审核；关闭时省略 safety_check 参数。 */
+const SafetyCheckSetting = () => {
+  const t = useTranslate()
+  const safetyCheck = useSettings((state) => state.safetyCheck)
+  const label = t('settingsSafetyCheck')
+  return (
+    <SettingCell
+      label={label}
+      description={t('settingsSafetyCheckDescription')}
+      status={null}
+      action={
+        <button
+          type="button"
+          role="switch"
+          aria-label={label}
+          aria-checked={safetyCheck}
+          className={styles.safetySwitch}
+          onClick={() => setSafetyCheck(!safetyCheck)}
         />
       }
     />
