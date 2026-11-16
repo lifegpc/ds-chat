@@ -124,10 +124,13 @@ export const zh = {
   exportAllDownload: '下载',
   deleteAllSessions: '删除所有对话',
   deleteAllSessionsModalTitle: '删除后，所有对话都将被清空且无法找回',
-  deleteAllSessionsModalDescription: '没有其他对话引用的云端附件及未发送的草稿也将被删除。',
+  deleteAllSessionsModalDescription:
+    '没有其他对话引用的 R2 附件及 DeepSeek Files API 文件，还有未发送的草稿，也将被删除。',
   historyDeleting: '删除中...',
   historyDeleted: '删除成功',
   historyDeleteFailed: '删除失败，请重试',
+  deepSeekFileCleanupFailed: '对话已删除，但部分 DeepSeek 文件未能删除，请检查 API Key 或网络。',
+  deepSeekFileCleanupNoApiKey: '对话已删除，但当前没有 API Key，无法删除 DeepSeek 文件。',
   upload: '上传',
   uploadUnsupportedFormat:
     '上传的文件包含暂未支持的文件格式，请转换文件格式后重试。支持 PDF、DOC、XLSX、PPT、图片、文本、代码等。',

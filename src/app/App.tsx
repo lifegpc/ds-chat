@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslate } from '../i18n/index.js'
 import { initSettings, useSettings } from '../services/settings.js'
 import { migrateLegacyChat } from '../services/chat/migrateLegacy.js'
@@ -6,6 +6,7 @@ import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport
 import {
   bindChatPersistence,
   initChat,
+  retryDeepSeekFileCleanup,
   retrySaveSessions,
   selectSession,
   useChatStore,
@@ -31,6 +32,8 @@ export const App = () => {
   const t = useTranslate()
   const isMobile = useIsMobile()
   const locale = useSettings((state) => state.locale)
+  const apiKey = useSettings((state) => state.apiKey)
+  const [settingsReady, setSettingsReady] = useState(false)
   // 移动端侧边栏以独立抽屉管理开合状态
   const siderCollapsed = useSettings((state) => state.siderCollapsed) && !isMobile
   const ready = useChatStore((state) => state.ready)
@@ -58,6 +61,12 @@ export const App = () => {
     document.title = locale === 'zh-CN' ? 'DeepSeek 聊天' : 'DeepSeek Chat'
   }, [locale])
 
+  useEffect(() => {
+    if (settingsReady) {
+      void retryDeepSeekFileCleanup()
+    }
+  }, [settingsReady, apiKey])
+
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
   useEffect(() => onUploadNotice(showToast), [])
   useEffect(bindChatPersistence, [])
@@ -73,6 +82,7 @@ export const App = () => {
     void (async () => {
       try {
         await initSettings()
+        setSettingsReady(true)
         await migrateLegacyChat()
       } catch (error) {
         // eslint-disable-next-line no-console

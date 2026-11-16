@@ -54,16 +54,20 @@ const saveFile = async (
 }
 
 const sessionWrites = new Map<string, Promise<void>>()
-const enqueueSessionWrite = (id: string, write: () => Promise<void>) => {
+const enqueueSessionWrite = <T>(id: string, write: () => Promise<T>): Promise<T> => {
   const previous = sessionWrites.get(id) ?? Promise.resolve()
   const current = previous.catch(() => {}).then(write)
-  sessionWrites.set(id, current)
+  const queued = current.then(
+    () => {},
+    () => {}
+  )
+  sessionWrites.set(id, queued)
   const cleanup = () => {
-    if (sessionWrites.get(id) === current) {
+    if (sessionWrites.get(id) === queued) {
       sessionWrites.delete(id)
     }
   }
-  void current.then(cleanup, cleanup)
+  void queued.then(cleanup)
   return current
 }
 
@@ -111,6 +115,12 @@ export const deleteSession = (id: string) =>
   enqueueSessionWrite(id, async () => {
     await api(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
   })
+
+export const loadDeepSeekFileCleanup = async () =>
+  (await api<{ fileIds: string[] }>('/deepseek-file-cleanup')).fileIds
+
+export const completeDeepSeekFileCleanup = (fileId: string) =>
+  api(`/deepseek-file-cleanup/${encodeURIComponent(fileId)}`, { method: 'DELETE' })
 
 export const saveFiles = async (files: StoredFile[]) => {
   for (const file of files) {

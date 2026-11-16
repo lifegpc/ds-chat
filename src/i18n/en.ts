@@ -132,10 +132,14 @@ export const en = {
   deleteAllSessions: 'Delete all chats',
   deleteAllSessionsModalTitle: 'Once deleted, all chats will be cleared and cannot be recovered.',
   deleteAllSessionsModalDescription:
-    'Cloud attachments with no remaining chat references and unsent drafts will also be deleted.',
+    'R2 attachments and DeepSeek Files API files with no remaining chat references, along with unsent drafts, will also be deleted.',
   historyDeleting: 'Deleting...',
   historyDeleted: 'Successfully deleted.',
   historyDeleteFailed: 'Failed to delete chats. Please try again.',
+  deepSeekFileCleanupFailed:
+    'The chat was deleted, but some DeepSeek files could not be deleted. Check your API key or network.',
+  deepSeekFileCleanupNoApiKey:
+    'The chat was deleted, but no API key is set to delete its DeepSeek files.',
   upload: 'Upload',
   uploadUnsupportedFormat:
     'The selected files include unsupported formats. Please convert them and try again. Supported: PDF, DOC, XLSX, PPT, images, text, code, and more.',

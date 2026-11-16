@@ -73,7 +73,7 @@ type SessionInput = {
   title: string
   createdAt: number
   updatedAt: number
-  messages: Array<{ role: string; files?: Array<{ id: string }> }>
+  messages: Array<{ role: string; files?: Array<{ id: string; serverId?: string | null }> }>
   [key: string]: unknown
 }
 
@@ -449,6 +449,30 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
     return new Response(null, { status: 204 })
   }
 
+  if (path === '/deepseek-file-cleanup' && method === 'GET') {
+    const pending = await env.DB.prepare(
+      `SELECT q.file_id FROM deepseek_file_cleanup q
+       WHERE q.user_id = ? AND NOT EXISTS (
+         SELECT 1 FROM session_deepseek_file_refs refs WHERE refs.file_id = q.file_id
+       )
+       ORDER BY q.created_at LIMIT 50`
+    )
+      .bind(userId)
+      .all<{ file_id: string }>()
+    return json({ fileIds: pending.results.map((row) => row.file_id) })
+  }
+
+  const deepSeekCleanupMatch = /^\/deepseek-file-cleanup\/([^/]+)$/.exec(path)
+  if (deepSeekCleanupMatch && method === 'DELETE') {
+    const fileId = decodeURIComponent(deepSeekCleanupMatch[1])
+    await env.DB.prepare(
+      'DELETE FROM deepseek_file_cleanup WHERE user_id = ? AND file_id = ?'
+    )
+      .bind(userId, fileId)
+      .run()
+    return new Response(null, { status: 204 })
+  }
+
   if (path === '/sessions' && method === 'GET') {
     // Covered by sessions_by_user_updated; does not read the JSON conversation payload.
     const page = await sessionPage(userId, env, url)
@@ -475,6 +499,17 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
         ...new Set(
           session.messages.flatMap((message) =>
             message.role === 'user' ? (message.files ?? []).map((file) => file.id) : []
+          )
+        ),
+      ]
+      const deepSeekFileIds = [
+        ...new Set(
+          session.messages.flatMap((message) =>
+            message.role === 'user'
+              ? (message.files ?? [])
+                  .map((file) => file.serverId)
+                  .filter((fileId): fileId is string => typeof fileId === 'string' && fileId.length > 0)
+              : []
           )
         ),
       ]
@@ -522,6 +557,14 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
            AND (session_id = ? OR session_id IS NULL)
            AND file_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))`
         ).bind(userId, session.id, JSON.stringify(fileIds)),
+        env.DB.prepare(
+          'DELETE FROM session_deepseek_file_refs WHERE user_id = ? AND session_id = ?'
+        ).bind(userId, session.id),
+        env.DB.prepare(
+          `INSERT INTO session_deepseek_file_refs (user_id, session_id, file_id)
+           SELECT ?, ?, CAST(value AS TEXT) FROM json_each(?) WHERE 1
+           ON CONFLICT(user_id, session_id, file_id) DO NOTHING`
+        ).bind(userId, session.id, JSON.stringify(deepSeekFileIds)),
       ])
       await collectOrphans(
         userId,
@@ -545,7 +588,7 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
       return result.meta.changes ? new Response(null, { status: 204 }) : error('not_found', 404)
     }
     if (method === 'DELETE') {
-      const [previousFiles, pendingFiles] = await Promise.all([
+      const [previousFiles, pendingFiles, previousDeepSeekFiles] = await Promise.all([
         env.DB.prepare(
           'SELECT file_id, content_hash FROM session_file_refs WHERE user_id = ? AND session_id = ?'
         )
@@ -556,6 +599,11 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
         )
           .bind(userId, sessionId)
           .all<{ content_hash: string }>(),
+        env.DB.prepare(
+          'SELECT file_id FROM session_deepseek_file_refs WHERE user_id = ? AND session_id = ?'
+        )
+          .bind(userId, sessionId)
+          .all<{ file_id: string }>(),
       ])
       await env.DB.batch([
         env.DB.prepare('DELETE FROM session_file_refs WHERE user_id = ? AND session_id = ?').bind(
@@ -566,6 +614,21 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
         env.DB.prepare('DELETE FROM pending_files WHERE user_id = ? AND session_id = ?').bind(
           userId,
           sessionId
+        ),
+        env.DB.prepare(
+          'DELETE FROM session_deepseek_file_refs WHERE user_id = ? AND session_id = ?'
+        ).bind(userId, sessionId),
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO deepseek_file_cleanup (user_id, file_id, created_at)
+           SELECT ?, CAST(input.value AS TEXT), ? FROM json_each(?) input
+           WHERE NOT EXISTS (
+             SELECT 1 FROM session_deepseek_file_refs refs
+             WHERE refs.file_id = CAST(input.value AS TEXT)
+           )`
+        ).bind(
+          userId,
+          Date.now(),
+          JSON.stringify(previousDeepSeekFiles.results.map((row) => row.file_id))
         ),
       ])
       await collectOrphans(
@@ -698,7 +761,7 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
     )
       .bind(userId, importId)
       .first<{ count: number }>()
-    const [oldRefs, oldFiles, oldPendingFiles, stagedFiles] = await Promise.all([
+    const [oldRefs, oldFiles, oldPendingFiles, stagedFiles, oldDeepSeekFiles] = await Promise.all([
       env.DB.prepare('SELECT content_hash FROM session_file_refs WHERE user_id = ?')
         .bind(userId)
         .all<{ content_hash: string }>(),
@@ -711,10 +774,14 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
       env.DB.prepare('SELECT content_hash FROM import_file_refs WHERE user_id = ? AND import_id = ?')
         .bind(userId, importId)
         .all<{ content_hash: string }>(),
+      env.DB.prepare('SELECT file_id FROM session_deepseek_file_refs WHERE user_id = ?')
+        .bind(userId)
+        .all<{ file_id: string }>(),
     ])
     const batch = await env.DB.batch([
       env.DB.prepare('DELETE FROM session_file_refs WHERE user_id = ?').bind(userId),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+      env.DB.prepare('DELETE FROM session_deepseek_file_refs WHERE user_id = ?').bind(userId),
       env.DB.prepare('DELETE FROM user_files WHERE user_id = ?').bind(userId),
       env.DB.prepare('DELETE FROM pending_files WHERE user_id = ?').bind(userId),
       env.DB.prepare(
@@ -738,6 +805,29 @@ const routeApi = async (request: Request, env: Env, userId: string) => {
          JOIN user_files uf ON uf.user_id = ? AND uf.file_id = CAST(json_extract(f.value, '$.id') AS TEXT)
          WHERE s.user_id = ? AND s.import_id = ? AND json_extract(m.value, '$.role') = 'user'`
       ).bind(userId, userId, userId, importId),
+      env.DB.prepare(
+        `INSERT INTO session_deepseek_file_refs (user_id, session_id, file_id)
+         SELECT DISTINCT ?, s.session_id, CAST(json_extract(f.value, '$.serverId') AS TEXT)
+         FROM import_sessions s
+         JOIN json_each(s.data_json, '$.messages') m
+         JOIN json_each(m.value, '$.files') f
+         WHERE s.user_id = ? AND s.import_id = ?
+           AND json_extract(m.value, '$.role') = 'user'
+           AND json_type(f.value, '$.serverId') = 'text'
+           AND length(json_extract(f.value, '$.serverId')) > 0`
+      ).bind(userId, userId, importId),
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO deepseek_file_cleanup (user_id, file_id, created_at)
+         SELECT ?, CAST(input.value AS TEXT), ? FROM json_each(?) input
+         WHERE NOT EXISTS (
+           SELECT 1 FROM session_deepseek_file_refs refs
+           WHERE refs.file_id = CAST(input.value AS TEXT)
+         )`
+      ).bind(
+        userId,
+        Date.now(),
+        JSON.stringify(oldDeepSeekFiles.results.map((row) => row.file_id))
+      ),
       env.DB.prepare('DELETE FROM import_sessions WHERE user_id = ? AND import_id = ?').bind(
         userId,
         importId

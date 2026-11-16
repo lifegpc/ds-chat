@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
-import { ApiError, streamMessage } from '../api/client.js'
+import { translate } from '../../i18n/index.js'
+import { showToast } from '../../components/base/toastState.js'
+import { ApiError, deleteFile, streamMessage } from '../api/client.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
@@ -43,6 +45,57 @@ const SESSION_CACHE_LIMIT = 5
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
+
+/** 删除最后一个会话引用后，从 DeepSeek Files API 清理对应附件。 */
+const deleteOrphanedDeepSeekFiles = async (fileIds: string[]) => {
+  const uniqueIds = [...new Set(fileIds)]
+  if (uniqueIds.length === 0) {
+    return
+  }
+  const apiKey = useSettings.getState().apiKey
+  if (!apiKey) {
+    showToast(translate('deepSeekFileCleanupNoApiKey'))
+    return
+  }
+  const deleteOne = async (fileId: string) => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await deleteFile(apiKey, fileId)
+        await db.completeDeepSeekFileCleanup(fileId)
+        return
+      } catch (error) {
+        // Treat an already-expired or manually deleted DeepSeek file as cleaned up.
+        if (error instanceof ApiError && error.status === 404) {
+          await db.completeDeepSeekFileCleanup(fileId)
+          return
+        }
+        if (attempt >= 2 || !isRetryableApiError(error)) {
+          throw error
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
+      }
+    }
+  }
+  let failed = false
+  for (let start = 0; start < uniqueIds.length; start += 4) {
+    const results = await Promise.allSettled(uniqueIds.slice(start, start + 4).map(deleteOne))
+    failed ||= results.some((result) => result.status === 'rejected')
+  }
+  if (failed) {
+    showToast(translate('deepSeekFileCleanupFailed'))
+    // eslint-disable-next-line no-console
+    console.error('[chat] failed to delete one or more orphaned DeepSeek files')
+  }
+}
+
+/** Retry queued remote-file deletions after deleting chats or when settings are initialized. */
+export const retryDeepSeekFileCleanup = async () => {
+  try {
+    await deleteOrphanedDeepSeekFiles(await db.loadDeepSeekFileCleanup())
+  } catch (error) {
+    db.reportStorageError('read DeepSeek file cleanup queue')(error)
+  }
+}
 
 /** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
 const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
@@ -464,6 +517,7 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     try {
       await write()
       page = await db.commitStaging()
+      await retryDeepSeekFileCleanup()
     } catch (error) {
       await db.clearStaging().catch(db.reportStorageError('clear unfinished history replacement'))
       throw error
@@ -537,7 +591,7 @@ export const renameSession = (id: string, title: string) => {
 }
 
 /**
- * 删除会话时由 Worker 检查文件引用；仅在当前身份及导入暂存中都没有引用时清理 R2 原件。
+ * 删除会话时由 Worker 检查文件引用；清理无剩余会话引用的 R2 原件与 DeepSeek 文件。
  */
 export const removeSession = (id: string): Promise<boolean> => {
   const task = removeSessionData(id).finally(() => deletionTasks.delete(task))
@@ -559,6 +613,7 @@ const removeSessionData = async (id: string): Promise<boolean> => {
       return false
     }
     await db.deleteSession(id)
+    await retryDeepSeekFileCleanup()
     if (epoch !== historyEpoch) {
       return true
     }
