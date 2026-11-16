@@ -1,10 +1,15 @@
 import clsx from 'clsx'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { IconPanelLeftOutline16, IconSettingsOutline16, NewChatIcon } from '../base/icons.js'
 import { setSiderCollapsed } from '../../services/settings.js'
 import { groupSessions } from '../../services/chat/sessionGroups.js'
-import { newChat, removeSession, useChatStore } from '../../services/chat/store.js'
+import {
+  loadMoreSessions,
+  newChat,
+  removeSession,
+  useChatStore,
+} from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
@@ -19,11 +24,34 @@ import styles from './Sider.module.css'
 export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
   const t = useTranslate()
   const sessions = useChatStore((state) => state.sessions)
+  const hasMoreSessions = useChatStore((state) => state.hasMoreSessions)
+  const loadingSessions = useChatStore((state) => state.loadingSessions)
+  const sessionsMoreError = useChatStore((state) => state.sessionsMoreError)
   const activeId = useChatStore((state) => state.activeId)
+  const listRef = useRef<HTMLDivElement>(null)
+  const pageTriggerRef = useRef<HTMLDivElement>(null)
   const [now, setNow] = useState(Date.now)
   const groups = useMemo(() => groupSessions(sessions, now, t), [sessions, now, t])
   const [deleting, setDeleting] = useState<SessionSummary | null>(null)
   const [deletePending, setDeletePending] = useState(false)
+
+  useEffect(() => {
+    const root = listRef.current
+    const target = pageTriggerRef.current
+    if (!root || !target || !hasMoreSessions || loadingSessions || sessionsMoreError) {
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreSessions()
+        }
+      },
+      { root, rootMargin: '180px 0px' }
+    )
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [hasMoreSessions, loadingSessions, sessions.length, sessionsMoreError])
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
@@ -75,7 +103,7 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
         {t('newChat')}
       </button>
       <div className={styles.listWrap}>
-        <div className={styles.list}>
+        <div ref={listRef} className={styles.list}>
           {groups.map((group) => (
             <div key={group.key} className={styles.section}>
               <div className={styles.sectionHeader}>{group.label}</div>
@@ -89,6 +117,16 @@ export const Sider = ({ mobile = false }: { mobile?: boolean }) => {
               ))}
             </div>
           ))}
+          {sessionsMoreError ? (
+            <button type="button" className={styles.moreRetry} onClick={() => void loadMoreSessions()}>
+              {t('retry')}
+            </button>
+          ) : loadingSessions ? (
+            <div className={styles.moreLoading} role="status">
+              {t('sessionLoading')}
+            </div>
+          ) : null}
+          {hasMoreSessions ? <div ref={pageTriggerRef} className={styles.pageTrigger} /> : null}
         </div>
       </div>
       <div className={styles.bottom}>

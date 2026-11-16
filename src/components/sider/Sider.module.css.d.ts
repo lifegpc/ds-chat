@@ -8,6 +8,9 @@ declare const styles: {
   readonly "list": string;
   readonly "section": string;
   readonly "sectionHeader": string;
+  readonly "moreLoading": string;
+  readonly "moreRetry": string;
+  readonly "pageTrigger": string;
   readonly "bottom": string;
   readonly "settings": string;
   readonly "settingsIcon": string;

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslate } from '../i18n/index.js'
-import { useSettings } from '../services/settings.js'
+import { initSettings, useSettings } from '../services/settings.js'
+import { migrateLegacyChat } from '../services/chat/migrateLegacy.js'
 import { useIsMobile, useMobileViewport, usePreventPageScroll } from './viewport.js'
 import {
   bindChatPersistence,
@@ -54,6 +55,7 @@ export const App = () => {
 
   useEffect(() => {
     document.documentElement.lang = locale
+    document.title = locale === 'zh-CN' ? 'DeepSeek 聊天' : 'DeepSeek Chat'
   }, [locale])
 
   // 文件数、存储空间达到上限时，附件上只显示「上传失败」，原因用 toast 说明
@@ -68,9 +70,18 @@ export const App = () => {
   useEffect(closeMobileSider, [activeId, isMobile])
 
   useEffect(() => {
-    void initChat()
-    // 首次打开先在设置里输入 API Key
-    ensureApiKey()
+    void (async () => {
+      try {
+        await initSettings()
+        await migrateLegacyChat()
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[startup] cloud storage initialization failed', error)
+      }
+      await initChat()
+      // 登录并加载云端设置后，再提示填写 API Key。
+      ensureApiKey()
+    })()
   }, [])
 
   return (

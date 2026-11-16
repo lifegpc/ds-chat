@@ -86,7 +86,11 @@ export const createConfig = ({
     }),
   ],
   performance: { hints: false },
-  devServer: { port: 8090, ...devServer },
+  devServer: {
+    port: 8090,
+    proxy: [{ context: ['/api'], target: 'http://localhost:8787', changeOrigin: true }],
+    ...devServer,
+  },
 })
 
 // eslint-disable-next-line import/no-default-export

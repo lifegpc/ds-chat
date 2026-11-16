@@ -9,18 +9,24 @@ import { Tooltip } from '../base/Tooltip.js'
 import { FileCard } from '../files/FileCard.js'
 import styles from './MessageFile.module.css'
 
-/** 原件从 IndexedDB 读出并生成本地地址；undefined 表示加载中，null 表示原件缺失。 */
+/** 原件从 Workers API 读取并生成预览地址；undefined 表示加载中，null 表示原件缺失。 */
 const useFileUrl = (id: string) => {
   const [fileUrl, setFileUrl] = useState<{ id: string; url: string | null } | null>(null)
   useEffect(() => {
     let objectUrl: string | null = null
     let cancelled = false
-    loadFile(id).then((blob) => {
-      if (!cancelled) {
-        objectUrl = blob ? URL.createObjectURL(blob) : null
-        setFileUrl({ id, url: objectUrl })
-      }
-    })
+    void loadFile(id)
+      .then((blob) => {
+        if (!cancelled) {
+          objectUrl = blob ? URL.createObjectURL(blob) : null
+          setFileUrl({ id, url: objectUrl })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFileUrl({ id, url: null })
+        }
+      })
     return () => {
       cancelled = true
       if (objectUrl) {
@@ -77,7 +83,7 @@ export const MessageFile = ({
       )
     ) : null
 
-    // 上传中：本地原件已在 IndexedDB，先垫在蒙层下显示，避免只有一块灰色占位
+    // 上传中显示蒙层，附件卡片状态与请求上传进度保持一致。
     if (uploading) {
       return (
         <div className={clsx(styles.image, styles.imageThumb)} title={file.name}>

@@ -1,7 +1,7 @@
 import { formatDate } from '../../utils/format.js'
 import * as db from './db.js'
 import { replaceHistory, useChatStore } from './store.js'
-import type { Session } from './types.js'
+import type { Session, SessionSummary } from './types.js'
 
 export { BackupError } from './history/errors.js'
 
@@ -19,10 +19,18 @@ const backupFileName = (date: Date) => `deepseek_data-${formatDate(date)}.zip`
 /** 导出为历史会话导出格式的 ZIP，可再次导入。 */
 export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
   enqueueBackup(async () => {
-    // 列表和已加载内容保留导出开始时的快照；未打开的会话逐条读取，不填满详情缓存。
-    const { sessions, sessionCache } = useChatStore.getState()
+    // 摘要逐页读取；未打开的会话逐条获取，不填满详情缓存。
+    const { sessions: loadedSummaries, sessionCache } = useChatStore.getState()
+    const byId = new Map(loadedSummaries.map((summary) => [summary.id, summary]))
+    const summaries: SessionSummary[] = []
+    let cursor: db.SessionCursor | undefined
+    do {
+      const page = await db.loadSessionSummaries(cursor)
+      summaries.push(...page.items.map((summary) => byId.get(summary.id) ?? summary))
+      cursor = page.nextCursor ?? undefined
+    } while (cursor)
     async function* readSessions(): AsyncGenerator<Session> {
-      for (const summary of sessions) {
+      for (const summary of summaries) {
         const session = Object.hasOwn(sessionCache, summary.id)
           ? sessionCache[summary.id]
           : await db.loadSession(summary.id)
@@ -50,7 +58,7 @@ export const importHistory = (file: File): Promise<number> =>
     return replaceHistory(() => importArchive(file))
   })
 
-/** 确认删除后调用：以空历史原子替换全部本地会话与附件，保留 API Key 和其他设置。 */
+/** 确认删除后调用：以空历史原子替换当前身份的会话与附件，保留 API Key 和其他设置。 */
 export const clearHistory = (): Promise<void> =>
   enqueueBackup(async () => {
     await replaceHistory(async () => {})

@@ -2,30 +2,39 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
+A chat app powered by the DeepSeek API. Conversations, settings, and attachments use Cloudflare Workers, D1, and R2. Sign-in uses Cloudflare Zero Trust Access, and the browser connects directly to DeepSeek for chat requests.
 
-You can [try the app online](https://deepseek-ai.github.io/chat-demo/) or download the archive from [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
+Create Cloudflare D1, R2, and Access resources before deployment. See the [Cloudflare deployment guide](CLOUDFLARE.md) for setup and local development.
 
 ## Getting started
 
-Install Node.js 22.12+ and pnpm, then run:
+Install Node.js 22.12+, pnpm, and set up the Cloudflare resources. Start the local Worker and frontend:
 
 ```sh
 git clone https://github.com/deepseek-ai/chat-demo.git
 cd chat-demo
 pnpm install
+pnpm build
+cp .dev.vars.example .dev.vars
+pnpm dlx wrangler d1 migrations apply ds-chat --local
+pnpm worker:dev
+```
+
+In another terminal, run:
+
+```sh
 pnpm dev
 ```
 
 Open http://localhost:8090.
 
-To build the static site:
+To build and deploy the Worker:
 
 ```sh
-pnpm build
+pnpm deploy
 ```
 
-The output is written to `dist/`. Deploy it to a static web server or open `dist/index.html` directly. Opening the file directly requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests.
+The Worker serves the `dist/` frontend and handles `/api/*` requests.
 
 ## Features
 
@@ -37,21 +46,23 @@ The output is written to `dist/`. Deploy it to a static web server or open `dist
 
 ## Data and storage
 
-Your API key and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB. Local data is isolated by browser profile and site origin. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+Settings and conversations are stored in D1 under the Cloudflare Access identity. API keys are encrypted by the Worker before storage. The sidebar loads conversation summaries in pages as you scroll and fetches details when opened. Attachments use SHA-256 R2 object keys so identical content is stored once; an object is deleted after its last conversation reference is removed. On first sign-in, existing browser IndexedDB conversations and attachments are migrated to that identity. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
 
-History import and export in Settings use ZIP archives. After confirmation and successful validation, importing replaces all local conversations and attachments. Exports include conversations and locally available original images, but exclude API keys, settings, and original non-image attachments. See the [history import/export documentation (Chinese)](src/services/chat/history/README.md) for the archive format and preservation details.
+History import and export in Settings use ZIP archives. After confirmation and successful validation, importing replaces all cloud conversations and attachments for the current identity. Exports include conversations and available original images, but exclude API keys, settings, and original non-image attachments. See the [history import/export documentation (Chinese)](src/services/chat/history/README.md) for the archive format and preservation details.
 
-Settings → Data → Delete all chats clears all local conversations, original attachments, and unsent drafts after confirmation. It stops ongoing replies and returns to a new chat. Your API key and settings are preserved; files already uploaded to the API service are not deleted.
+Settings → Data → Delete all chats clears the current identity's cloud conversations and unreferenced R2 files, plus unsent drafts. It stops ongoing replies and returns to a new chat. Your API key and settings are preserved; files already uploaded to DeepSeek are not deleted.
 
 ## Development
 
 | Command       | Description                  |
 | ------------- | ---------------------------- |
-| `pnpm dev`    | Start the development server |
-| `pnpm build`  | Build into `dist/`           |
-| `pnpm type`   | Run TypeScript type checks   |
-| `pnpm lint`   | Lint with oxlint             |
-| `pnpm format` | Format with oxfmt            |
+| `pnpm dev`        | Start the frontend dev server            |
+| `pnpm worker:dev` | Start the local Worker and D1/R2 emulators |
+| `pnpm build`      | Build into `dist/`                        |
+| `pnpm deploy`     | Build and deploy the Worker               |
+| `pnpm type`       | Run TypeScript type checks                |
+| `pnpm lint`       | Lint with oxlint                          |
+| `pnpm format`     | Format with oxfmt                         |
 
 [rspack.config.ts](rspack.config.ts) uses `https://api.deepseek.com` by default. Use `createConfig({ apiOrigin, devServer })` to customize the API origin and development server proxy.
 
@@ -64,10 +75,12 @@ src/
   i18n/                English and Chinese translations
   services/
     api/               API requests, SSE, and protocol types
-    chat/              Conversations, message branches, storage, and history import/export
+    chat/              Conversations, message branches, cloud storage, and history import/export
     markdown/          Markdown parsing, syntax highlighting, and diagrams
     speech/            Audio recording and read-aloud playback
   utils/               Shared utilities
+worker/                Cloudflare Worker API
+migrations/            D1 schema and indexes
 ```
 
 ## License

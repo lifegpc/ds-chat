@@ -7,8 +7,8 @@ export type Locale = 'zh-CN' | 'en-US'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
-type Settings = {
+/** 用户设置由 Workers API 写入 D1；API Key 在 Worker 端加密后保存。 */
+export type Settings = {
   apiKey: string | null
   locale: Locale
   themePreference: ThemePreference
@@ -35,18 +35,6 @@ const read = (key: string) => {
     return localStorage.getItem(key)
   } catch {
     return null
-  }
-}
-
-const write = (key: string, value: string | null) => {
-  try {
-    if (value === null) {
-      localStorage.removeItem(key)
-    } else {
-      localStorage.setItem(key, value)
-    }
-  } catch {
-    // 存储不可用时只在内存中生效
   }
 }
 
@@ -98,43 +86,111 @@ export const useSettings = create<Settings>(() => ({
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
 
+const settingsApi = async (method: 'GET' | 'PUT', value?: Settings) => {
+  const response = await fetch('/api/settings', {
+    method,
+    credentials: 'include',
+    ...(value
+      ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) }
+      : {}),
+  })
+  if (!response.ok) {
+    throw new Error(`Settings request failed: ${response.status} ${response.statusText}`)
+  }
+  return method === 'GET'
+    ? ((await response.json()) as { settings: Settings | null }).settings
+    : null
+}
+
+let initialization: Promise<void> | undefined
+let writeQueue: Promise<void> = Promise.resolve()
+
+const persistSettings = () => {
+  writeQueue = writeQueue
+    .catch(() => {})
+    .then(async () => {
+      await settingsApi('PUT', useSettings.getState())
+    })
+  return writeQueue
+}
+
+/** 迁移已有浏览器偏好到当前 Access 身份，并读取该身份的云端设置。 */
+export const initSettings = (): Promise<void> => {
+  if (initialization) {
+    return initialization
+  }
+  initialization = (async () => {
+    const remote = await settingsApi('GET')
+    if (remote) {
+      useSettings.setState({
+        ...useSettings.getState(),
+        ...remote,
+        location: normalizeLocation(remote.location),
+      })
+    } else {
+      await settingsApi('PUT', useSettings.getState())
+    }
+    for (const key of Object.values(KEYS)) {
+      try {
+        localStorage.removeItem(key)
+      } catch {
+        // 无持久化权限时，远端设置仍正常可用。
+      }
+    }
+  })().finally(() => {
+    initialization = undefined
+  })
+  return initialization
+}
+
+const reportSettingsError = (error: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error('[settings] save failed', error)
+}
+
 export const setLocale = (locale: Locale) => {
-  write(KEYS.locale, locale)
   useSettings.setState({ locale })
+  void persistSettings().catch(reportSettingsError)
 }
 
 export const setLocation = (value: UserLocation | null) => {
   const location = normalizeLocation(value)
-  write(KEYS.location, location ? JSON.stringify(location) : null)
   useSettings.setState({ location })
+  void persistSettings().catch(reportSettingsError)
 }
 
 export const setThemePreference = (themePreference: ThemePreference) => {
-  write(KEYS.themePreference, themePreference)
   useSettings.setState({ themePreference })
+  void persistSettings().catch(reportSettingsError)
 }
 
 export const setTtsVoice = (ttsVoice: TtsVoice) => {
-  write(KEYS.ttsVoice, ttsVoice)
   useSettings.setState({ ttsVoice })
+  void persistSettings().catch(reportSettingsError)
 }
 
-export const setApiKey = (apiKey: string | null) => {
-  write(KEYS.apiKey, apiKey)
+export const setApiKey = async (apiKey: string | null) => {
+  const previous = useSettings.getState().apiKey
   useSettings.setState({ apiKey })
+  try {
+    await persistSettings()
+  } catch (error) {
+    useSettings.setState({ apiKey: previous })
+    throw error
+  }
 }
 
 export const setThinking = (thinking: boolean) => {
-  write(KEYS.thinking, String(thinking))
   useSettings.setState({ thinking })
+  void persistSettings().catch(reportSettingsError)
 }
 
 export const setSearch = (search: boolean) => {
-  write(KEYS.search, String(search))
   useSettings.setState({ search })
+  void persistSettings().catch(reportSettingsError)
 }
 
 export const setSiderCollapsed = (siderCollapsed: boolean) => {
-  write(KEYS.siderCollapsed, String(siderCollapsed))
   useSettings.setState({ siderCollapsed })
+  void persistSettings().catch(reportSettingsError)
 }

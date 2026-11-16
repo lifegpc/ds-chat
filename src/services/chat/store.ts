@@ -7,6 +7,7 @@ import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from 
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
+import type { SessionCursor } from './db.js'
 import {
   clearAllDrafts,
   clearDraft,
@@ -64,8 +65,12 @@ type ChatState = {
   initError: boolean
   /** 历史导入或全部删除期间锁定交互，提交成功前仍展示原有记录。 */
   importingHistory: boolean
-  /** 仅列表元数据，按 updatedAt 降序；流式消息更新不会改变此数组。 */
+  /** 已加载的列表元数据页，按 updatedAt 降序；流式消息更新不会改变此数组。 */
   sessions: SessionSummary[]
+  sessionsCursor: SessionCursor | null
+  hasMoreSessions: boolean
+  loadingSessions: boolean
+  sessionsMoreError: boolean
   sessionCache: Record<string, Session>
   sessionLoadErrors: Record<string, boolean>
   sessionSaveErrors: Record<string, boolean>
@@ -80,6 +85,10 @@ export const useChatStore = create<ChatState>(() => ({
   initError: false,
   importingHistory: false,
   sessions: [],
+  sessionsCursor: null,
+  hasMoreSessions: false,
+  loadingSessions: false,
+  sessionsMoreError: false,
   sessionCache: {},
   sessionLoadErrors: {},
   sessionSaveErrors: {},
@@ -90,7 +99,9 @@ export const useChatStore = create<ChatState>(() => ({
 const { getState: get, setState: set } = useChatStore
 
 const sortSessions = (sessions: SessionSummary[]) =>
-  [...sessions].sort((a, b) => b.updatedAt - a.updatedAt)
+  [...sessions].sort((a, b) =>
+    b.updatedAt - a.updatedAt || (a.id === b.id ? 0 : a.id < b.id ? 1 : -1)
+  )
 
 const getSession = (id: string) => {
   const cache = get().sessionCache
@@ -299,14 +310,21 @@ export const initChat = (): Promise<void> => {
   set({ initError: false })
   initTask = (async () => {
     try {
-      const summaries = await db.loadSessionSummaries()
+      const page = await db.loadSessionSummaries()
       if (epoch === historyEpoch) {
-        set({ ready: true, sessions: sortSessions(summaries) })
+        set({
+          ready: true,
+          sessions: page.items,
+          sessionsCursor: page.nextCursor,
+          hasMoreSessions: page.nextCursor !== null,
+          loadingSessions: false,
+          sessionsMoreError: false,
+        })
       }
     } catch (error) {
       if (epoch === historyEpoch) {
         set({ initError: true })
-        db.reportStorageError('read local sessions')(error)
+        db.reportStorageError('read cloud session page')(error)
       }
     } finally {
       if (epoch === historyEpoch) {
@@ -315,6 +333,44 @@ export const initChat = (): Promise<void> => {
     }
   })()
   return initTask
+}
+
+/** 按需追加下一页会话摘要，详情仍在用户打开会话时单独读取。 */
+export const loadMoreSessions = async () => {
+  const state = get()
+  if (!state.ready || !state.hasMoreSessions || state.loadingSessions || !state.sessionsCursor) {
+    return
+  }
+  const epoch = historyEpoch
+  const cursor = state.sessionsCursor
+  set({ loadingSessions: true, sessionsMoreError: false })
+  try {
+    const page = await db.loadSessionSummaries(cursor)
+    if (epoch !== historyEpoch) {
+      return
+    }
+    set((current) => {
+      const known = new Set(current.sessions.map((session) => session.id))
+      return {
+        sessions: sortSessions([
+          ...current.sessions,
+          ...page.items.filter((session) => !known.has(session.id)),
+        ]),
+        sessionsCursor: page.nextCursor,
+        hasMoreSessions: page.nextCursor !== null,
+        sessionsMoreError: false,
+      }
+    })
+  } catch (error) {
+    if (epoch === historyEpoch) {
+      set({ sessionsMoreError: true })
+      db.reportStorageError('read next session page')(error)
+    }
+  } finally {
+    if (epoch === historyEpoch) {
+      set({ loadingSessions: false })
+    }
+  }
 }
 
 /** 同一会话合并并发读取；切换只改变 activeId，旧请求不会把界面切回去。 */
@@ -341,7 +397,7 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
         return
       }
       if (!stored) {
-        throw new Error(`Session ${id} is missing from local storage`)
+        throw new Error(`Session ${id} is missing from cloud storage`)
       }
       const settled = settleInterrupted(normalizeSession(stored))
       // 读取期间可能已在列表重命名，保留最新元数据，不能让旧读取覆盖它。
@@ -404,11 +460,12 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     initTask = undefined
     sessionLoads.clear()
     await waitForIdle()
+    await db.flushSessionWrites()
     await db.clearStaging()
-    let summaries: SessionSummary[]
+    let page: Awaited<ReturnType<typeof db.commitStaging>>
     try {
       await write()
-      summaries = await db.commitStaging()
+      page = await db.commitStaging()
     } catch (error) {
       await db.clearStaging().catch(db.reportStorageError('clear unfinished history replacement'))
       throw error
@@ -420,13 +477,17 @@ export const replaceHistory = async (write: () => Promise<void>): Promise<number
     set({
       ready: true,
       initError: false,
-      sessions: sortSessions(summaries),
+      sessions: page.items,
+      sessionsCursor: page.nextCursor,
+      hasMoreSessions: page.nextCursor !== null,
+      loadingSessions: false,
+      sessionsMoreError: false,
       sessionCache: {},
       sessionLoadErrors: {},
       sessionSaveErrors: {},
       activeId: null,
     })
-    return summaries.length
+    return page.totalCount ?? page.items.length
   } finally {
     set({ importingHistory: false })
     retrySaveSessions()
@@ -478,8 +539,7 @@ export const renameSession = (id: string, title: string) => {
 }
 
 /**
- * 删除会话；本地原件仅在没有其他会话引用时清理。远端文件不删：导入、编辑、重新生成都会复用同一个附件，
- * 同一服务端文件可能被多个会话引用，不维护引用计数。
+ * 删除会话时由 Worker 检查文件引用；仅在当前身份及导入暂存中都没有引用时清理 R2 原件。
  */
 export const removeSession = (id: string): Promise<boolean> => {
   const task = removeSessionData(id).finally(() => deletionTasks.delete(task))
@@ -773,8 +833,8 @@ const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
 }
 
 /**
- * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
- * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
+ * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取云端原件补传。
+ * 云端也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
 const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<string | null> => {
   if (file.serverId) {
@@ -894,7 +954,7 @@ const collectServerFileIds = (request: Request): Set<string> => {
 
 /**
  * 服务端判定 file_id 失效时，清掉对应附件的 serverId 并丢弃旧的上传任务，
- * 下一次补齐会重新读取本地原件上传。报错里点名了 file_id 就只重置这些，
+ * 下一次补齐会重新读取云端原件上传。报错里点名了 file_id 就只重置这些，
  * 没点名（如 invalid file_id）则重置本次请求用到的全部附件。
  */
 const reuploadInvalidatedFiles = (sessionId: string, request: Request, error: unknown): boolean => {
