@@ -251,6 +251,126 @@
   padding: 12px;
 }
 
+.mobileParamsButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--dsw-alias-button-primary-fill);
+    outline-offset: 2px;
+  }
+}
+
+.paramsModal {
+  --modal-header-gap: 8px;
+  width: 420px;
+  max-height: calc(100dvh - 32px);
+  padding: 20px;
+}
+
+.paramsModalMain {
+  overflow-y: auto;
+}
+
+.parameterRows {
+  display: flex;
+  flex-direction: column;
+}
+
+.parameterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.parameterText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.parameterLabel {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.parameterDescription {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.parameterControl {
+  flex-shrink: 0;
+}
+
+.parameterSwitch {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--dsw-alias-border-l3);
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--dsw-alias-button-elevated-fill);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+    content: '';
+    transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+  }
+
+  &[aria-checked='true'] {
+    background-color: var(--dsw-alias-button-primary-fill);
+  }
+
+  &[aria-checked='true']::after {
+    transform: translateX(20px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--dsw-alias-button-primary-fill);
+    outline-offset: 2px;
+  }
+}
+
+button.paramsEffortSelect {
+  min-width: 100px;
+}
+
 .toggles {
   display: flex;
   flex: 1;
@@ -261,6 +381,35 @@
 
 .collapsedToggles .toggleLabel {
   display: none;
+}
+
+.collapsedToggles .effortLabel {
+  display: none;
+}
+
+.effortControl {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.effortLabel {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+button.effortSelect {
+  min-width: 72px;
+  height: 34px;
+  padding: 0 34px 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 18px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .toggle {

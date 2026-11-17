@@ -146,8 +146,11 @@ export const en = {
   uploadFileStatusFailed: 'Upload failed',
   uploadRetry: '{message}. Click to retry',
   chatInputPlaceholderChat: 'Enter a message',
+  chatInputParams: 'Chat parameters',
   deactivatedThinkTooltip: 'Think before responding to solve reasoning problems',
   thinkingSwitch: 'DeepThink',
+  reasoningEffort: 'Effort',
+  reasoningEffortTooltip: 'Choose low, high, or max. This controls reasoning strength when DeepThink is enabled.',
   expertMode: 'Expert mode',
   expertModeTooltip: 'Uses deepseek-v4-pro, which does not support image understanding.',
   expertModeImageWarning:

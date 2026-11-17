@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { TtsVoice } from './api/speech.js'
+import type { ReasoningEffort } from './api/types.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
 export type Locale = 'zh-CN' | 'en-US'
@@ -17,6 +18,7 @@ export type Settings = {
   safetyCheck: boolean
   thinking: boolean
   expertMode: boolean
+  effort: ReasoningEffort
   search: boolean
   siderCollapsed: boolean
 }
@@ -30,6 +32,7 @@ const KEYS = {
   safetyCheck: 'chat-demo:safety-check',
   thinking: 'chat-demo:thinking',
   expertMode: 'chat-demo:expert-mode',
+  effort: 'chat-demo:reasoning-effort',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
 } as const
@@ -78,6 +81,10 @@ const initialThemePreference = (): ThemePreference => {
 
 /** 未保存过时使用服务端默认音色 stella（海星） */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
+const initialEffort = (): ReasoningEffort => {
+  const saved = read(KEYS.effort)
+  return saved === 'low' || saved === 'max' ? saved : 'high'
+}
 
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
@@ -89,6 +96,7 @@ export const useSettings = create<Settings>(() => ({
   safetyCheck: read(KEYS.safetyCheck) !== 'false',
   thinking: read(KEYS.thinking) === 'true',
   expertMode: read(KEYS.expertMode) === 'true',
+  effort: initialEffort(),
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
@@ -199,6 +207,11 @@ export const setThinking = (thinking: boolean) => {
 
 export const setExpertMode = (expertMode: boolean) => {
   useSettings.setState({ expertMode })
+  void persistSettings().catch(reportSettingsError)
+}
+
+export const setEffort = (effort: ReasoningEffort) => {
+  useSettings.setState({ effort })
   void persistSettings().catch(reportSettingsError)
 }
 

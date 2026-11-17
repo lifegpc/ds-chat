@@ -16,6 +16,17 @@ export const IconChevronDownOutline14 = () => (
   </svg>
 )
 
+export const IconPlusOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M8 2.5V13.5M2.5 8H13.5"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
 export const IconChevronRightOutline14 = () => (
   <svg width={14} height={14} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

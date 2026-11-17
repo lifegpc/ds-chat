@@ -320,13 +320,14 @@ export const bindChatPersistence = () => {
 
 /** 按当前开关快照模型、深度思考与智能搜索配置。 */
 const createReply = (): AssistantMessage => {
-  const { thinking, search, expertMode } = useSettings.getState()
+  const { thinking, search, expertMode, effort } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
     model: expertMode ? 'deepseek-v4-pro' : MODEL,
     thinking,
+    effort,
     search,
     prefix: true,
     status: 'pending',
@@ -847,12 +848,13 @@ export const continueReply = (sessionId: string, messageId: string) => {
   ) {
     return
   }
-  const { thinking, search } = useSettings.getState()
+  const { thinking, search, effort } = useSettings.getState()
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
     model: previous.model ?? selectedModel(),
     thinking: previous.thinking ?? thinking,
+    effort: previous.effort ?? effort,
     search: previous.search ?? search,
     status: 'pending',
     stopReason: undefined,
@@ -1121,6 +1123,7 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
   const model = initial.model ?? selectedModel()
+  const effort = initial.effort ?? useSettings.getState().effort
   const supportsImages = model !== 'deepseek-v4-pro'
   if (!getSession(sessionId)?.title) {
     titleRequests.add(controller)
@@ -1165,6 +1168,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
             system: SYSTEM_PROMPT,
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+            output_config: { effort },
             ...(useSettings.getState().safetyCheck ? { safety_check: { level: 'high' } } : {}),
             tools: serverTools(initial.search ?? false),
             ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
