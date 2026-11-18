@@ -21,6 +21,7 @@ export type Settings = {
   expertMode: boolean
   effort: ReasoningEffort
   sendShortcut: SendShortcut
+  autoCollapseThinking: boolean
   search: boolean
   siderCollapsed: boolean
 }
@@ -36,6 +37,7 @@ const KEYS = {
   expertMode: 'chat-demo:expert-mode',
   effort: 'chat-demo:reasoning-effort',
   sendShortcut: 'chat-demo:send-shortcut',
+  autoCollapseThinking: 'chat-demo:auto-collapse-thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
 } as const
@@ -103,6 +105,7 @@ export const useSettings = create<Settings>(() => ({
   expertMode: read(KEYS.expertMode) === 'true',
   effort: initialEffort(),
   sendShortcut: initialSendShortcut(),
+  autoCollapseThinking: read(KEYS.autoCollapseThinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
@@ -223,6 +226,11 @@ export const setEffort = (effort: ReasoningEffort) => {
 
 export const setSendShortcut = (sendShortcut: SendShortcut) => {
   useSettings.setState({ sendShortcut })
+  void persistSettings().catch(reportSettingsError)
+}
+
+export const setAutoCollapseThinking = (autoCollapseThinking: boolean) => {
+  useSettings.setState({ autoCollapseThinking })
   void persistSettings().catch(reportSettingsError)
 }
 

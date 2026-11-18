@@ -22,6 +22,7 @@ import {
   isChineseBrowser,
   setLocale,
   setLocation,
+  setAutoCollapseThinking,
   setSafetyCheck,
   setSendShortcut,
   setThemePreference,
@@ -103,6 +104,7 @@ const SettingsContent = () => {
               <TtsVoiceSetting />
               <SafetyCheckSetting />
               <SendShortcutSetting />
+              <AutoCollapseThinkingSetting />
               <LocationSetting />
             </>
           ) : (
@@ -359,6 +361,29 @@ const SendShortcutSetting = () => {
             { value: 'shift-enter', label: t('settingsSendShortcutShiftEnter') },
           ]}
           onChange={setSendShortcut}
+        />
+      }
+    />
+  )
+}
+
+const AutoCollapseThinkingSetting = () => {
+  const t = useTranslate()
+  const autoCollapseThinking = useSettings((state) => state.autoCollapseThinking)
+  const label = t('settingsAutoCollapseThinking')
+  return (
+    <SettingCell
+      label={label}
+      description={t('settingsAutoCollapseThinkingDescription')}
+      status={null}
+      action={
+        <button
+          type="button"
+          role="switch"
+          aria-label={label}
+          aria-checked={autoCollapseThinking}
+          className={styles.safetySwitch}
+          onClick={() => setAutoCollapseThinking(!autoCollapseThinking)}
         />
       }
     />

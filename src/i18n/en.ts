@@ -100,6 +100,9 @@ export const en = {
   settingsSendShortcutDescription: 'Choose whether Enter or Shift+Enter sends. The other shortcut inserts a new line.',
   settingsSendShortcutEnter: 'Enter sends',
   settingsSendShortcutShiftEnter: 'Shift+Enter sends',
+  settingsAutoCollapseThinking: 'Auto-collapse thinking',
+  settingsAutoCollapseThinkingDescription:
+    'Collapse thinking after a reply finishes. Click the title to expand it again.',
   settingsLocation: 'Location',
   settingsLocationProvince: 'Select province/region',
   settingsLocationCity: 'Select city',

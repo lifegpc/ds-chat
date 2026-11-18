@@ -95,6 +95,8 @@ export const zh = {
   settingsSendShortcutDescription: '选择按 Enter 还是 Shift+Enter 发送；另一个组合键用于换行。',
   settingsSendShortcutEnter: 'Enter 发送',
   settingsSendShortcutShiftEnter: 'Shift+Enter 发送',
+  settingsAutoCollapseThinking: '自动折叠思考内容',
+  settingsAutoCollapseThinkingDescription: '回复生成结束后自动收起思考内容，点击标题仍可展开。',
   settingsLocation: '位置信息',
   settingsLocationProvince: '请选择省份/地区',
   settingsLocationCity: '请选择市',
