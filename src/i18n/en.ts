@@ -96,6 +96,10 @@ export const en = {
   settingsSafetyCheck: 'Model content safety checks',
   settingsSafetyCheckDescription:
     'Reviews inputs and outputs. Flagged content may return an error or refusal; safety tokens are billed as output tokens.',
+  settingsSendShortcut: 'Send shortcut',
+  settingsSendShortcutDescription: 'Choose whether Enter or Shift+Enter sends. The other shortcut inserts a new line.',
+  settingsSendShortcutEnter: 'Enter sends',
+  settingsSendShortcutShiftEnter: 'Shift+Enter sends',
   settingsLocation: 'Location',
   settingsLocationProvince: 'Select province/region',
   settingsLocationCity: 'Select city',

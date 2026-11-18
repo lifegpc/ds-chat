@@ -91,6 +91,10 @@ export const zh = {
   settingsSafetyCheck: '模型内容安全审核',
   settingsSafetyCheckDescription:
     '开启 DeepSeek 基础风控，审核输入与输出；命中风险时可能报错或拒答，并产生审核 Token 费用。',
+  settingsSendShortcut: '发送快捷键',
+  settingsSendShortcutDescription: '选择按 Enter 还是 Shift+Enter 发送；另一个组合键用于换行。',
+  settingsSendShortcutEnter: 'Enter 发送',
+  settingsSendShortcutShiftEnter: 'Shift+Enter 发送',
   settingsLocation: '位置信息',
   settingsLocationProvince: '请选择省份/地区',
   settingsLocationCity: '请选择市',

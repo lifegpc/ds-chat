@@ -23,6 +23,7 @@ import {
   setLocale,
   setLocation,
   setSafetyCheck,
+  setSendShortcut,
   setThemePreference,
   setTtsVoice,
   useSettings,
@@ -38,7 +39,7 @@ import { closeSettings, useSettingsDialog, type SettingsSection } from './settin
 import styles from './Settings.module.css'
 
 /**
- * 设置弹窗：分「通用设置」（主题、语言、朗读音色、安全审核、位置）与「数据管理」（API Key、导入、导出、删除）。
+ * 设置弹窗：分「通用设置」（主题、语言、朗读音色、安全审核、发送快捷键、位置）与「数据管理」。
  * 桌面端为居中弹窗、左侧导航；移动端为底部弹层、导航横排在内容上方
  */
 export const SettingsDialog = () => {
@@ -101,6 +102,7 @@ const SettingsContent = () => {
               <LocaleSetting />
               <TtsVoiceSetting />
               <SafetyCheckSetting />
+              <SendShortcutSetting />
               <LocationSetting />
             </>
           ) : (
@@ -334,6 +336,29 @@ const SafetyCheckSetting = () => {
           aria-checked={safetyCheck}
           className={styles.safetySwitch}
           onClick={() => setSafetyCheck(!safetyCheck)}
+        />
+      }
+    />
+  )
+}
+
+const SendShortcutSetting = () => {
+  const t = useTranslate()
+  const sendShortcut = useSettings((state) => state.sendShortcut)
+  return (
+    <SettingCell
+      label={t('settingsSendShortcut')}
+      description={t('settingsSendShortcutDescription')}
+      status={null}
+      action={
+        <Select
+          ariaLabel={t('settingsSendShortcut')}
+          value={sendShortcut}
+          options={[
+            { value: 'enter', label: t('settingsSendShortcutEnter') },
+            { value: 'shift-enter', label: t('settingsSendShortcutShiftEnter') },
+          ]}
+          onChange={setSendShortcut}
         />
       }
     />

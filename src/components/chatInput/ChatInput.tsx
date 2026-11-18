@@ -75,6 +75,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
   )
   const thinking = useSettings((state) => state.thinking)
+  const sendShortcut = useSettings((state) => state.sendShortcut)
   const effort = useSettings((state) => state.effort)
   const expertMode = useSettings((state) => state.expertMode)
   const importingHistory = useChatStore((state) => state.importingHistory)
@@ -227,7 +228,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            const sendsOnEnter = sendShortcut === 'enter' ? !event.shiftKey : event.shiftKey
+            if (event.key === 'Enter' && sendsOnEnter && !event.nativeEvent.isComposing) {
               event.preventDefault()
               send()
             }

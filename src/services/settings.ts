@@ -4,6 +4,7 @@ import type { ReasoningEffort } from './api/types.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
 export type Locale = 'zh-CN' | 'en-US'
+export type SendShortcut = 'enter' | 'shift-enter'
 
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
@@ -19,6 +20,7 @@ export type Settings = {
   thinking: boolean
   expertMode: boolean
   effort: ReasoningEffort
+  sendShortcut: SendShortcut
   search: boolean
   siderCollapsed: boolean
 }
@@ -33,6 +35,7 @@ const KEYS = {
   thinking: 'chat-demo:thinking',
   expertMode: 'chat-demo:expert-mode',
   effort: 'chat-demo:reasoning-effort',
+  sendShortcut: 'chat-demo:send-shortcut',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
 } as const
@@ -85,6 +88,8 @@ const initialEffort = (): ReasoningEffort => {
   const saved = read(KEYS.effort)
   return saved === 'low' || saved === 'max' ? saved : 'high'
 }
+const initialSendShortcut = (): SendShortcut =>
+  read(KEYS.sendShortcut) === 'shift-enter' ? 'shift-enter' : 'enter'
 
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
@@ -97,6 +102,7 @@ export const useSettings = create<Settings>(() => ({
   thinking: read(KEYS.thinking) === 'true',
   expertMode: read(KEYS.expertMode) === 'true',
   effort: initialEffort(),
+  sendShortcut: initialSendShortcut(),
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
 }))
@@ -212,6 +218,11 @@ export const setExpertMode = (expertMode: boolean) => {
 
 export const setEffort = (effort: ReasoningEffort) => {
   useSettings.setState({ effort })
+  void persistSettings().catch(reportSettingsError)
+}
+
+export const setSendShortcut = (sendShortcut: SendShortcut) => {
+  useSettings.setState({ sendShortcut })
   void persistSettings().catch(reportSettingsError)
 }
 
