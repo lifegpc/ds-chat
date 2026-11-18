@@ -23,8 +23,12 @@
 
     &:hover,
     &.active {
+      .title {
+        padding-right: 32px;
+      }
+
       .action {
-        display: flex;
+        visibility: visible;
       }
     }
   }
@@ -40,9 +44,13 @@
 }
 
 .action {
-  display: none;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
   flex-shrink: 0;
-  margin-left: 4px;
+  transform: translateY(-50%);
+  visibility: hidden;
 }
 
 .renameInput {
@@ -61,7 +69,11 @@
 
 @media (hover: none) {
   .action {
-    display: flex;
+    visibility: visible;
+  }
+
+  .title {
+    padding-right: 32px;
   }
 }
 
