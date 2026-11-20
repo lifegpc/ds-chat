@@ -198,8 +198,17 @@ export type MessageUsage = {
   cache_read_input_tokens: number
   /** message_start 中为 0，message_delta 中为全轮累计值 */
   output_tokens: number
-  /** 仅当 message_delta 中有对外输出的搜索结果块时出现 */
-  server_tool_use?: { web_search_requests: number; tool_search: number }
+  /** 开启思考或高等级安全审核时返回；明细均已包含在 output_tokens 中。 */
+  output_tokens_details?: { thinking_tokens?: number; safety_tokens?: number }
+  service_tier?: string
+  /** 有服务端工具调用时返回，计数是累计值。 */
+  server_tool_use?: {
+    web_search_requests: number
+    tool_search: number
+    web_fetch_requests?: number
+    tool_fetch?: number
+    tool_image_search?: number
+  }
 }
 
 /** content_block_start 携带的初始内容块；工具块已是完整内容 */

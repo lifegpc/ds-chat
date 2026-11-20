@@ -1,6 +1,7 @@
 import type {
   ContentBlockDelta,
   MessageStreamEvent,
+  MessageUsage,
   OutputBlockStart,
   TextCitation,
 } from './types.js'
@@ -165,11 +166,28 @@ const readDelta = (value: unknown): ContentBlockDelta | null => {
   }
 }
 
-const isUsage = (value: unknown) =>
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
+
+const isOptionalCount = (value: unknown) => value === undefined || isCount(value)
+
+const isUsage = (value: unknown): value is MessageUsage =>
   isRecord(value) &&
   ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'output_tokens'].every(
-    (key) => typeof value[key] === 'number' && Number.isFinite(value[key])
-  )
+    (key) => isCount(value[key])
+  ) &&
+  (value.output_tokens_details === undefined ||
+    (isRecord(value.output_tokens_details) &&
+      isOptionalCount(value.output_tokens_details.thinking_tokens) &&
+      isOptionalCount(value.output_tokens_details.safety_tokens))) &&
+  (value.service_tier === undefined || isString(value.service_tier)) &&
+  (value.server_tool_use === undefined ||
+    (isRecord(value.server_tool_use) &&
+      isCount(value.server_tool_use.web_search_requests) &&
+      isCount(value.server_tool_use.tool_search) &&
+      isOptionalCount(value.server_tool_use.web_fetch_requests) &&
+      isOptionalCount(value.server_tool_use.tool_fetch) &&
+      isOptionalCount(value.server_tool_use.tool_image_search)))
 
 /** 未识别或无法安全消费的事件静默丢弃，不影响后续有效内容与正常结束。 */
 export const readMessageEvent = (value: unknown): MessageStreamEvent | null => {

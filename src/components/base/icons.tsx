@@ -242,6 +242,18 @@ export const IconRefreshOutline16 = () => (
   </svg>
 )
 
+export const IconUsageOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2 13.5H14M3.5 11V8.5M6.5 11V5M9.5 11V7M12.5 11V2.5"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 export const IconSendOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
